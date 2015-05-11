@@ -50,8 +50,8 @@ for record in records:
             est_records_count += 1
 
 unique_unigene_ids = list(set(unigene_ids))
-# print "ESTs Count: ", len(unigene_ids)
-# print "Unique Count: ", len(unique_unigene_ids)
+# output.write("ESTs Count: ", len(unigene_ids)
+# output.write("Unique Count: ", len(unique_unigene_ids)
 
 def get_protein_record(protein_id):
     handle = Entrez.efetch(db="protein", id=protein_id, rettype="gb", retmode="xml")
@@ -64,14 +64,16 @@ def get_nucleotide_record(gene_id):
     gene_sequence_record = Entrez.read(handle)
     handle.close()
     return gene_sequence_record
-
+output = open("results_xenopus.txt", 'w')
 input = open("Xl_cleaned.data")
 records = UniGene.parse(input)
 for record in records:
-    if record.ID in unique_unigene_ids:
+    if record.ID in unique_unigene_ids and not Gene.objects.filter(unigene_id=record.ID).exists():
         db_gene = Gene()
-        print "\n", "="*30
-        print "Processing UniGene ID : ", record.ID, "\n"
+        output.write("="*30)
+        output.write("\n")
+        output.write("UniGene ID : %s\n" % record.ID)
+        print "Accessing Record Unigene : ", record.ID
         db_gene.unigene_id = record.ID
         protsim = get_protsim(record)
         if type(protsim) != types.NoneType:
@@ -80,32 +82,33 @@ for record in records:
                 protein_record = get_protein_record(protsim['PROTID'])
             except httplib.BadStatusLine:
                 protein_record = get_protein_record(protsim['PROTID'])
-            print "Protein Similarity Match : ", protsim['PCT'], "%"
+            output.write("Protein Similarity Match : %s %%\n" % protsim['PCT'])
             db_gene.protein_similarity = protsim['PCT']
-            print "Protein ID : ", protsim['PROTID']
+            output.write("Protein ID : %s\n" % protsim['PROTID'])
             db_gene.protein_id = protsim['PROTID']
-            print "Protein Length : ", protein_record[0]['GBSeq_length']
+            output.write("Protein Length : %s\n" % protein_record[0]['GBSeq_length'])
             db_gene.protein_length = protein_record[0]['GBSeq_length']
-            print "Protein Source Organism : ", protein_record[0]['GBSeq_source']
+            output.write("Protein Source Organism : %s\n" % protein_record[0]['GBSeq_source'])
             db_gene.organism = protein_record[0]['GBSeq_source']
-            print "Protein Name : ", protein_record[0]['GBSeq_definition']
+            output.write("Protein Name : %s\n" % protein_record[0]['GBSeq_definition'])
             db_gene.protein_name = protein_record[0]['GBSeq_definition']
             db_gene.protein_sequence = protein_record[0]['GBSeq_sequence'].upper()
-            print " "
-            print "Gene ID : ", protein_record[0]['GBSeq_source-db'].split()[-1]
+            output.write("%s\n" % protein_record[0]['GBSeq_sequence'].upper())
+            output.write("\n")
+            output.write("Gene ID : %s\n" % protein_record[0]['GBSeq_source-db'].split()[-1])
             db_gene.gene_id = protein_record[0]['GBSeq_source-db'].split()[-1]
             gene_sequence_record = ''
             try:
                 gene_sequence_record = get_nucleotide_record(protein_record[0]['GBSeq_source-db'].split()[-1])
             except httplib.BadStatusLine:
                 gene_sequence_record = get_nucleotide_record(protein_record[0]['GBSeq_source-db'].split()[-1])
-            print "Gene Name : ", gene_sequence_record[0]['GBSeq_definition']
+            output.write("Gene Name : %s\n" % gene_sequence_record[0]['GBSeq_definition'])
             db_gene.gene_name = gene_sequence_record[0]['GBSeq_definition']
-            print "Gene Type : ", gene_sequence_record[0]['GBSeq_moltype']
+            output.write("Gene Type : %s\n" % gene_sequence_record[0]['GBSeq_moltype'])
             db_gene.gene_type = gene_sequence_record[0]['GBSeq_moltype']
-            print "Gene Length : ", gene_sequence_record[0]['GBSeq_length']
+            output.write("Gene Length : %s\n" % gene_sequence_record[0]['GBSeq_length'])
             db_gene.gene_length = gene_sequence_record[0]['GBSeq_length']
-            # print "Gene Topology :", gene_sequence_record[0]['GBSeq_topology']
+            # output.write("Gene Topology :", gene_sequence_record[0]['GBSeq_topology']
             db_gene.gene_sequence = gene_sequence_record[0]['GBSeq_sequence']
             gene_sequence = gene_sequence_record[0]['GBSeq_sequence']
             for level1 in gene_sequence_record[0]['GBSeq_feature-table']:
@@ -115,11 +118,11 @@ for record in records:
                             start = int(level1['GBFeature_intervals'][0]['GBInterval_from'])
                             end = int(level1['GBFeature_intervals'][0]['GBInterval_to'])
                             diff = end - start + 1
-                            print "Start Codon : ", start
+                            output.write("CDS Start : %d\n" % start)
                             db_gene.gene_start_nucleotide = start
-                            print "End Codon : ", end
+                            output.write("CDS End : %d\n" % end)
                             db_gene.gene_end_nucleotide = end
-                            print "Coding Sequence Length : ", diff
+                            output.write("Coding Sequence Length : %d\n" % diff)
                             db_gene.gene_length = diff
                             start_codon = gene_sequence[start-1:start+2]
                             start_aa = Seq(start_codon, generic_dna).translate()
@@ -129,11 +132,13 @@ for record in records:
                             stop_aa = Seq(stop_codon, generic_dna).translate()
                             db_gene.gene_stop_codon = stop_codon
                             db_gene.protein_stop_aa = stop_aa
-                            print "Start Codon : ", start_codon, "(", start_aa , ")"
-                            print "Stop Codon : ", stop_codon, "(", stop_aa , ")"
+                            output.write("Start Codon : %s (%s)\n" % (start_codon, start_aa))
+                            output.write("Stop Codon : %s (%s)\n" % (stop_codon,  stop_aa))
+            output.write("%s\n" % gene_sequence)
         else:
             db_gene.gene_sequence = "TRANSCRIBED LOCUS BUT NO MATCHING GENE FOUND"
             db_gene.protein_sequence = "TRANSCRIBED LOCUS BUT NO MATCHING GENE FOUND"
-            print "TRANSCRIBED LOCUS BUT NO MATCHING GENE FOUND"
+            output.write("TRANSCRIBED LOCUS BUT NO MATCHING GENE FOUND\n")
         db_gene.save()
-
+input.close()
+output.close()
