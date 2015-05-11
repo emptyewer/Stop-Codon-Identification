@@ -1,11 +1,10 @@
 import re, sys, time
-import types
+import httplib, textwrap, types
 from Bio import SeqIO
 from Bio import Entrez
 from Bio import UniGene
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
-import httplib
 from xenopus.models import Gene
 
 Entrez.email = "vkrishnamani@healthcare.uiowa.edu"
@@ -93,7 +92,8 @@ for record in records:
             output.write("Protein Name : %s\n" % protein_record[0]['GBSeq_definition'])
             db_gene.protein_name = protein_record[0]['GBSeq_definition']
             db_gene.protein_sequence = protein_record[0]['GBSeq_sequence'].upper()
-            output.write("%s\n" % protein_record[0]['GBSeq_sequence'].upper())
+            for line in textwrap.wrap(protein_record[0]['GBSeq_sequence'].upper(), width=100):
+                output.write("%s\n" % line)
             output.write("\n")
             output.write("Gene ID : %s\n" % protein_record[0]['GBSeq_source-db'].split()[-1])
             db_gene.gene_id = protein_record[0]['GBSeq_source-db'].split()[-1]
@@ -134,7 +134,8 @@ for record in records:
                             db_gene.protein_stop_aa = stop_aa
                             output.write("Start Codon : %s (%s)\n" % (start_codon, start_aa))
                             output.write("Stop Codon : %s (%s)\n" % (stop_codon,  stop_aa))
-            output.write("%s\n" % gene_sequence)
+            for line in textwrap.wrap(gene_sequence, width=100):
+                output.write("%s\n" % line)
         else:
             db_gene.gene_sequence = "TRANSCRIBED LOCUS BUT NO MATCHING GENE FOUND"
             db_gene.protein_sequence = "TRANSCRIBED LOCUS BUT NO MATCHING GENE FOUND"
