@@ -16,6 +16,9 @@ class Gene(models.Model):
     gene_type = models.CharField(max_length=20)
 
     protein_similarity = models.FloatField(max_length=5, default=0)
+    protein_classification = models.CharField(max_length=10)
+    protein_tm_helices = models.PositiveIntegerField(default=0)
+    protein_predicted_segments = models.TextField()
 
     gene_start_nucleotide = models.PositiveIntegerField(default=0)
     gene_end_nucleotide = models.PositiveIntegerField(default=0)

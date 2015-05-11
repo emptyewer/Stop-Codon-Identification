@@ -1,5 +1,7 @@
 import re, sys, time
 import httplib, textwrap, types
+import subprocess
+from shlex import split
 from Bio import SeqIO
 from Bio import Entrez
 from Bio import UniGene
@@ -8,6 +10,24 @@ from Bio.Alphabet import generic_dna
 from xenopus.models import Gene
 
 Entrez.email = "vkrishnamani@healthcare.uiowa.edu"
+
+def parse_tmprediction(output):
+    split_values = output[0].split("\n")
+    string = ''
+    n_tm_helices = 0
+    segments = []
+    for value in split_values:
+        if re.match(r'^%pred', value):
+            string = value
+    if string != '':
+        (title, prediction) = string.split(":")
+        segments = prediction.split(',')
+        segments = [x.lstrip().rstrip() for x in segments]
+        for segment in segments:
+            if re.match(r'^M', segment):
+                n_tm_helices += 1
+    return(n_tm_helices, segments)
+
 
 #Get protein record from xenopus leavis or protein with largest similarity score
 def get_protsim(record):
@@ -91,10 +111,29 @@ for record in records:
             db_gene.organism = protein_record[0]['GBSeq_source']
             output.write("Protein Name : %s\n" % protein_record[0]['GBSeq_definition'])
             db_gene.protein_name = protein_record[0]['GBSeq_definition']
-            db_gene.protein_sequence = protein_record[0]['GBSeq_sequence'].upper()
-            for line in textwrap.wrap(protein_record[0]['GBSeq_sequence'].upper(), width=100):
+            protein_sequence = protein_record[0]['GBSeq_sequence'].upper()
+            db_gene.protein_sequence = protein_sequence
+
+            commandline = 'decodeanhmm -f /home/venky/Softwares/bin/tmhmm-2.0c/lib/TMHMM2.0.options -modelfile /home/venky/Softwares/bin/tmhmm-2.0c/lib/TMHMM2.0.model'
+            command = split(commandline)
+            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process.stdin.write(">" + protein_record[0]['GBSeq_definition'] + "\n" + protein_sequence)
+            (n_tm, segments) = parse_tmprediction(process.communicate())
+            if n_tm > 0:
+                db_gene.protein_classification = 'Membrane'
+                output.write("Protein Classification : Membrane\n")
+                db_gene.protein_tm_helices = n_tm
+                output.write("Number of Predicted TM helices: %d\n" % (n_tm))
+                db_gene.protein_predicted_segments = ", ".join(segments)
+                output.write("Predicted Segments : %s\n" % (", ".join(segments)))
+            else:
+                db_gene.protein_classification = 'Soluble'
+                output.write("Protein Classification : Soluble\n")
+
+            for line in textwrap.wrap(protein_sequence, width=100):
                 output.write("%s\n" % line)
             output.write("\n")
+
             output.write("Gene ID : %s\n" % protein_record[0]['GBSeq_source-db'].split()[-1])
             db_gene.gene_id = protein_record[0]['GBSeq_source-db'].split()[-1]
             gene_sequence_record = ''
